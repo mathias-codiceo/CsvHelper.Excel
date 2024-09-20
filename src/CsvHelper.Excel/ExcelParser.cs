@@ -83,7 +83,7 @@ namespace CsvHelper.Excel
         /// <param name="culture">The culture.</param>
         /// <param name="leaveOpen"><c>true</c> to leave the <see cref="TextWriter"/> open after the <see cref="ExcelParser"/> object is disposed, otherwise <c>false</c>.</param>
         public ExcelParser(Stream stream, string sheetName, CultureInfo culture, bool leaveOpen = false) : this(stream,
-            sheetName, new CsvConfiguration(culture) {LeaveOpen= leaveOpen})
+            sheetName, new CsvConfiguration(culture), leaveOpen)
         {
         }
 
@@ -104,9 +104,10 @@ namespace CsvHelper.Excel
         /// <param name="stream">The stream.</param>
         /// <param name="sheetName">The sheet name</param>
         /// <param name="configuration">The configuration.</param>
-        public ExcelParser(Stream stream, string sheetName, CsvConfiguration configuration)
+        /// <param name="leaveOpen"><c>true</c> to leave the <see cref="TextWriter"/> open after the <see cref="ExcelParser"/> object is disposed, otherwise <c>false</c>.</param>
+        public ExcelParser(Stream stream, string sheetName, CsvConfiguration configuration, bool leaveOpen = false)
         {
-            var workbook = new XLWorkbook(stream, XLEventTracking.Disabled);
+            var workbook = new XLWorkbook(stream);
 
             _worksheet = string.IsNullOrEmpty(sheetName) ? workbook.Worksheet(1) : workbook.Worksheet(sheetName);
 
@@ -123,7 +124,7 @@ namespace CsvHelper.Excel
             }
 
             Context = new CsvContext(this);
-            _leaveOpen = Configuration.LeaveOpen;
+            _leaveOpen = leaveOpen;
         }
 
 
@@ -205,11 +206,16 @@ namespace CsvHelper.Excel
         {
             var currentRow = _worksheet.Row(Row);
             var cells = currentRow.Cells(1, Count);
-            var values = Configuration.TrimOptions.HasFlag(TrimOptions.Trim)
-                ? cells.Select(x => x.Value.ToString()?.Trim()).ToArray()
-                : cells.Select(x => x.Value.ToString()).ToArray();
 
-            return values;
+            return cells.Select(x =>
+            {
+                var value = x.HasFormula
+                    ? x.CachedValue.ToString() ?? string.Empty
+                    : x.Value.ToString() ?? string.Empty;
+                if (Configuration.TrimOptions.HasFlag(TrimOptions.Trim))
+                    value = value.Trim();
+                return value;
+            }).ToArray();
         }
     }
 }
